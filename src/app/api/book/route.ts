@@ -15,6 +15,7 @@ import {
   updateBooking,
 } from '@/lib/supabase';
 import { TIMEZONE, localToUtc } from '@/lib/time';
+import {verifiedClient,ClientAccessError} from '@/lib/clientAuth';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -53,6 +54,8 @@ function asStringArray(value: unknown): string[] {
 }
 
 export async function POST(req: NextRequest) {
+  let account:{id:string;email:string};
+  try{account=await verifiedClient(req)}catch(error){return NextResponse.json({error:error instanceof ClientAccessError?error.message:'Account verification is temporarily unavailable.'},{status:error instanceof ClientAccessError?error.status:503})}
   let payload: Record<string, unknown>;
   try {
     payload = (await req.json()) as Record<string, unknown>;
@@ -61,7 +64,8 @@ export async function POST(req: NextRequest) {
   }
 
   const clientName = String(payload.clientName ?? '').trim();
-  const clientEmail = String(payload.clientEmail ?? '').trim();
+  const clientEmail = account.email;
+  payload = {...payload,clientEmail,authenticatedUserId:account.id};
   const clientPhone = String(payload.clientPhone ?? '').trim();
   const role = String(payload.goal ?? payload.role ?? '').trim();
   const challenges = asStringArray(payload.challenges);
@@ -112,6 +116,7 @@ export async function POST(req: NextRequest) {
       role,
       challenges,
       answers: {
+        authenticated_user:{id:account.id,issuer:'nurcupnuhkzpssrwgyxr'},
         role,
         challenges,
         name: clientName,
